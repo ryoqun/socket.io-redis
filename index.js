@@ -47,6 +47,8 @@ function adapter(uri, opts){
   var pub = opts.pubClient;
   var sub = opts.subClient;
   var prefix = opts.key || 'socket.io';
+  var lastMsgString = null;
+  var lastMsg = null;
 
   // init clients if needed
   if (!pub) pub = socket ? redis(socket) : redis(port, host);
@@ -91,7 +93,27 @@ function adapter(uri, opts){
   Redis.prototype.onmessage = function(pattern, channel, msg){
     var pieces = channel.split('#');
     if (uid == pieces.pop()) return debug('ignore same uid');
-    var args = msgpack.decode(msg);
+    var args, msgString;
+    msgString = msg.toString();
+
+    /* XXX MONKEY PATCH TO socket.io-redis! XXX
+
+    socket.io-redis has serious architectural performance issue;
+    Namely, it badly behaves when using many namespaces (200~),
+    which are mapped to user groups in one-to-one way in our codebase.
+    The problem is that it parses the exactly same msgpack blob
+    as many as the number of namespaces.
+
+    It should avoid such redundant parsing....
+
+    Ref: https://github.com/socketio/socket.io-redis/blob/0.1.4/index.js#L94 */
+
+    if (msgString === lastMsgString) {
+      args = lastMsg;
+    } else {
+      lastMsgString = msgString;
+      args = lastMsg = msgpack.decode(msg);
+    }
 
     if (args[0] && args[0].nsp === undefined) {
       args[0].nsp = '/';
