@@ -93,10 +93,13 @@ function adapter(uri, opts){
   Redis.prototype.onmessage = function(pattern, channel, msg){
     var pieces = channel.split('#');
     if (uid == pieces.pop()) return debug('ignore same uid');
-    var args, msgString;
-    msgString = msg.toString();
 
-    /* XXX MONKEY PATCH TO socket.io-redis! XXX
+    /* XXX MONKEY PATCH BEGIN XXX */
+
+    var args, msgString;
+    msgString = msg.toString(); // msg is a Buffer object so convert to String to use as a cache key
+
+    /*
 
     socket.io-redis has serious architectural performance issue;
     Namely, it badly behaves when using many namespaces (200~),
@@ -106,7 +109,9 @@ function adapter(uri, opts){
 
     It should avoid such redundant parsing....
 
-    Ref: https://github.com/socketio/socket.io-redis/blob/0.1.4/index.js#L94 */
+    Ref: https://github.com/socketio/socket.io-redis/blob/0.1.4/index.js#L94
+
+    */
 
     if (msgString === lastMsgString) {
       args = lastMsg;
@@ -114,6 +119,8 @@ function adapter(uri, opts){
       lastMsgString = msgString;
       args = lastMsg = msgpack.decode(msg);
     }
+
+    /* XXX MONKEY PATCH END XXX */
 
     if (args[0] && args[0].nsp === undefined) {
       args[0].nsp = '/';
